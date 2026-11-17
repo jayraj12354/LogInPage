@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Auth App</title>
+  <style>
+    body { font-family: sans-serif; max-width: 500px; margin: 40px auto; padding: 0 20px; }
+    input { display: block; width: 100%; margin: 8px 0; padding: 8px; box-sizing: border-box; }
+    button { padding: 8px 16px; margin-top: 8px; cursor: pointer; }
+    .section { border: 1px solid #ccc; padding: 16px; margin-bottom: 20px; }
+    .hidden { display: none; }
+    #message { color: red; margin-top: 8px; }
+    #dashboard-message { color: green; }
+  </style>
+</head>
+<body>
+
+  <div id="auth-section">
+    <div class="section">
+      <h2>Sign Up</h2>
+      <input type="text" id="signup-name" placeholder="Name (optional)" />
+      <input type="email" id="signup-email" placeholder="Email" />
+      <input type="password" id="signup-password" placeholder="Password" />
+      <button onclick="signup()">Sign Up</button>
+    </div>
+
+    <div class="section">
+      <h2>Login</h2>
+      <input type="email" id="login-email" placeholder="Email" />
+      <input type="password" id="login-password" placeholder="Password" />
+      <button onclick="login()">Login</button>
+    </div>
+
+    <div id="message"></div>
+  </div>
+
+  <div id="dashboard-section" class="hidden">
+    <div class="section">
+      <h2>Dashboard</h2>
+      <p id="dashboard-message"></p>
+      <h3>Profile</h3>
+      <p id="profile-info"></p>
+      <button onclick="logout()">Logout</button>
+    </div>
+  </div>
+
+  <script>
+    function displayMessage(feedbackText) {
+      document.getElementById("message").textContent = feedbackText;
+    }
+
+    async function signup() {
+      const enteredName = document.getElementById("signup-name").value;
+      const enteredEmail = document.getElementById("signup-email").value;
+      const enteredPassword = document.getElementById("signup-password").value;
+
+      const response = await fetch("/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: enteredName, email: enteredEmail, password: enteredPassword }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return displayMessage(result.error);
+      }
+
+      localStorage.setItem("token", result.token);
+      renderDashboard(result);
+    }
+
+    async function login() {
+      const enteredEmail = document.getElementById("login-email").value;
+      const enteredPassword = document.getElementById("login-password").value;
+
+      const response = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: enteredEmail, password: enteredPassword }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        return displayMessage(result.error);
+      }
+
+      localStorage.setItem("token", result.token);
+      renderDashboard(result);
+    }
+
+    async function renderDashboard(authPayload) {
+      document.getElementById("auth-section").classList.add("hidden");
+      document.getElementById("dashboard-section").classList.remove("hidden");
+
+      const jwtToken = localStorage.getItem("token");
+
+      const dashboardResponse = await fetch("/dashboard", {
+        headers: { Authorization: "Bearer " + jwtToken },
+      });
+      const dashboardData = await dashboardResponse.json();
+      document.getElementById("dashboard-message").textContent = dashboardData.message;
+
+      const profileResponse = await fetch("/me", {
+        headers: { Authorization: "Bearer " + jwtToken },
+      });
+      const profileData = await profileResponse.json();
+      document.getElementById("profile-info").textContent =
+        "ID: " + profileData.id + " | Email: " + profileData.email + " | Name: " + (profileData.name || "N/A") + " | Joined: " + new Date(profileData.createdAt).toLocaleDateString();
+    }
+
+    function logout() {
+      localStorage.removeItem("token");
+      document.getElementById("dashboard-section").classList.add("hidden");
+      document.getElementById("auth-section").classList.remove("hidden");
+      document.getElementById("message").textContent = "";
+    }
+
+    window.onload = async function () {
+      const activeToken = localStorage.getItem("token");
+      if (!activeToken) return;
+
+      const verifyResponse = await fetch("/me", {
+        headers: { Authorization: "Bearer " + activeToken },
+      });
+
+      if (verifyResponse.ok) {
+        const verifiedUser = await verifyResponse.json();
+        renderDashboard({ user: verifiedUser });
+      } else {
+        localStorage.removeItem("token");
+      }
+    };
+  </script>
+</body>
+</html>
